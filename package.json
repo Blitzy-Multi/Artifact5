@@ -1,7 +1,7 @@
 {
   "name": "artifact5",
   "version": "1.0.0",
-  "description": "Minimal Node.js + Express HTTP server",
+  "description": "Minimal Node.js + Express server exposing two plaintext endpoints.",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
