@@ -1,0 +1,13 @@
+{
+  "name": "artifact5",
+  "version": "1.0.0",
+  "description": "Minimal Node.js + Express HTTP server",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}
