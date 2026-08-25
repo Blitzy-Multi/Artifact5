@@ -1,0 +1,12 @@
+# Dependencies
+node_modules/
+
+# Environment files (nothing in this project reads one; this guard keeps a
+# learner-created file out of version control)
+.env
+
+# npm logs
+npm-debug.log*
+
+# Coverage output
+coverage/
