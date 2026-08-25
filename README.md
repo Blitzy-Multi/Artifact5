@@ -11,25 +11,24 @@ suite that keeps it honest.
 
 ## Prerequisites
 
-**Node.js 24** is the only thing you need to install. The project is written as plain ES modules and
-runs directly on the Node 24 release line with no build step, no transpiler and no bundler. Check
-what you have with:
+**Node.js 24** is the project runtime prerequisite. The verification steps in section 2 also use the
+`curl` command-line HTTP client, so make sure a curl executable is available — in Windows PowerShell
+5.1, invoke it as `curl.exe` rather than `curl`. The project otherwise runs as plain ES modules with
+no build step, transpiler or bundler. Check what you have with:
 
 ```bash
 node -v
 ```
 
-It should print a `v24.` version. `npm` ships with Node, so once Node is installed there is nothing
-else to set up by hand.
+It should print a `v24.` version. `npm` ships with Node, so it needs no separate installation.
 
 **Why this section matters.** `package.json` declares the supported Node line in its `engines`
-field, but npm only *warns* on a mismatch — it does not stop you. An older Node will therefore let
-`npm ci` run and then fail later, in ways that look unrelated to the version. Satisfy the
-prerequisite first.
+field. npm normally warns rather than enforcing that range, so verify that `node -v` starts with
+`v24.` before installing.
 
-**Using a version manager?** [`.nvmrc`](.nvmrc) records the exact version this project was built and
-tested against, `24.19.0`. `nvm` and `fnm` read that file directly, so from the project root you can
-simply run `nvm use` (or `fnm use`) to switch to it.
+**Using a version manager?** [`.nvmrc`](.nvmrc) pins Node `24.19.0`. `nvm` and `fnm` read that file
+directly, so from the project root run `nvm install` (nvm) or `fnm use --install-if-missing` (fnm) to
+install and activate it; if it is already installed, `nvm use` or `fnm use` is sufficient.
 
 ## 1. Install
 
@@ -43,9 +42,11 @@ Use `npm ci`, not `npm install`. The two are not interchangeable:
   committed `package-lock.json`, so you get the same packages that the project was tested with, and
   it fails loudly if the lockfile and `package.json` disagree rather than quietly changing either
   one.
-- **`npm install`** is the maintainer command. It *re-resolves* dependencies and *rewrites* the
-  lockfile. You only need it if you deliberately change the dependencies in `package.json` — in
-  which case commit the regenerated `package-lock.json` alongside your change.
+- **`npm install`** is the maintainer command, for when you deliberately add or change a dependency
+  in `package.json`. It compares the two files rather than always re-resolving: when the lockfile's
+  versions satisfy the ranges in `package.json` it installs exactly those, and only when the two
+  disagree does it resolve new versions and update the lockfile. Commit the regenerated
+  `package-lock.json` alongside your `package.json` change.
 
 ## 2. Run the service and call the endpoint
 
@@ -58,7 +59,7 @@ step needs **two terminals**, both opened in the project root.
 npm start
 ```
 
-It prints exactly one line and then waits for requests:
+The service then logs this line and waits for requests:
 
 ```text
 Hello service listening on http://localhost:3000/hello
@@ -71,6 +72,10 @@ That line is the service telling you which URL to call. Leave this terminal runn
 ```bash
 curl http://localhost:3000/hello
 ```
+
+These request examples use the curl executable. In Windows PowerShell 5.1, run
+`curl.exe http://localhost:3000/hello` (and `curl.exe -i ...`) because `curl` there is an alias for
+`Invoke-WebRequest`, which prints a formatted object instead of the raw body and headers.
 
 The response body is exactly:
 
@@ -101,7 +106,7 @@ The suite is **6 tests** and all of them should pass:
 - **3 tests** in `test/config.test.js` — the default port, an accepted override, and the fallback
   for a malformed value.
 
-To re-run the suite automatically whenever you edit a file:
+To rerun affected tests automatically when a test file or one of its imported dependencies changes:
 
 ```bash
 npm run test:watch
@@ -109,8 +114,8 @@ npm run test:watch
 
 That one also holds the foreground; press **Ctrl-C** to leave it.
 
-There is no test framework to learn here. The runner is Node's own `node:test`, and the assertions
-come from Node's own `node:assert/strict`, so both are already on your machine as part of the
+There is no third-party test framework to install: the runner is Node's built-in `node:test`, and
+assertions come from `node:assert/strict`, so both are already on your machine as part of the
 runtime. The only extra package the tests use is Supertest, which drives the app over HTTP inside
 the test process — it is installed for you by `npm ci` as a development dependency.
 
@@ -163,25 +168,27 @@ Eleven files, each with one job:
 | `package.json`              | The manifest: project identity, the ES-modules declaration, the `start` / `test` / `test:watch` scripts, the supported Node line, and the two dependencies |
 | `package-lock.json`         | The exact resolved dependency tree, committed so that `npm ci` is reproducible for everyone                    |
 | `.nvmrc`                    | The exact Node version to install, for `nvm` and `fnm` users                                                   |
-| `.gitignore`                | Keeps `node_modules/` and friends out of your commits                                                           |
+| `.gitignore`                | Keeps `node_modules/`, `.env`, npm debug logs, and `coverage/` out of commits                                   |
 | `README.md`                 | This document                                                                                                  |
-| `src/server.js`             | The bootstrap: loads the configuration, starts listening, logs the URL, and shuts down cleanly on a signal. **The only file that opens a port** |
+| `src/server.js`             | The bootstrap: loads the configuration, starts listening, logs the URL, and shuts down cleanly on a signal. **The only production file that calls `listen` or binds the configured service port** |
 | `src/app.js`                | `createApp()`: builds the Express application and mounts the router. **It never listens** — which is exactly what lets the tests use it |
 | `src/config.js`             | `loadConfig()`: reads `PORT` from the environment and validates it against the rules in section 4               |
 | `src/routes/hello.route.js` | The endpoint itself: the `/hello` path and the handler that returns `Hello world`                               |
-| `test/hello.route.test.js`  | Proves the endpoint's response, and that no other spelling of the path answers                                  |
+| `test/hello.route.test.js`  | Proves the exact response, exact path matching, and 404 responses for `POST`, `PUT`, `DELETE` and `PATCH` on `/hello` |
 | `test/config.test.js`       | Proves the port default, the override, and the fallback                                                         |
 
 **Why `app.js` and `server.js` are two files.** This is the single structural decision that makes
 the project testable. `src/app.js` only *describes* the application and hands it back, while
-`src/server.js` is the only module that *runs* it by binding a port. If the tests had to import a
-module that calls `listen`, every test run would leave a real server open on the configured port —
-so the factory is kept separate from the bootstrap, and the test suite builds its own app instead.
+`src/server.js` is the only module that binds the configured service port; Supertest temporarily
+uses an ephemeral port for each in-process test request. If the tests had to import a module that
+calls `listen`, every test run would leave a real server open on the configured port — so the
+factory is kept separate from the bootstrap, and the test suite builds its own app instead.
 
 ## 6. One endpoint, and one endpoint only
 
-`/hello` is the whole public surface, and it is matched exactly. Every other request gets a `404`,
-including the near misses:
+`/hello` is the only explicitly registered route and is matched exactly. Only `GET /hello` answers
+with `Hello world`; none of the near misses below is registered, and neither is any of the four
+write verbs, so each of them gets a `404`:
 
 | Request                                        | Response |
 | ---------------------------------------------- | -------- |
@@ -194,10 +201,10 @@ including the near misses:
 `test/hello.route.test.js` asserts all of these, so a change that quietly widens the endpoint fails
 the suite instead of shipping.
 
-## 7. If your browser shows `304 Not Modified`
-
-Opening `http://localhost:3000/hello` in a browser and reloading it can show `304 Not Modified`
-with an empty body instead of `200` and `Hello world`. That is correct HTTP: the response carries a
-weak `ETag`, the browser sends it back as `If-None-Match`, and the service replies "nothing has
-changed". It is not a failure. The `curl` commands above send fresh, unconditional requests, so
-they always show you the full `200` response.
+Two requests are answered without being registered, and they are why the table lists paths and write
+verbs rather than "everything else". Express derives `HEAD /hello` (a `200` with no body) and
+`OPTIONS /hello` (a `200` advertising the methods it works out) from the single `GET` registration —
+that is the framework doing its job, not a second endpoint, and neither response is something this
+project wrote or asserts. A conditional `GET` is the third request the table does not cover: the
+response carries a weak `ETag`, so a client that sends it back as `If-None-Match` — a browser reload,
+typically — gets a `304` with no body, which is correct HTTP rather than a failure.

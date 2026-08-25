@@ -57,14 +57,30 @@ const { port } = loadConfig();
  * only caller is on the same machine. Binding the default and printing
  * `localhost` is correct for every case this project supports.
  *
- * No `error` listener is attached and no `try`/`catch` wraps the call. If the
- * port is already taken, the unhandled `EADDRINUSE` failure — a loud, accurate
- * stack trace naming the port — is the intended behaviour, and the documented
- * remedy is the `PORT` override described in README.md.
+ * The callback below takes an `error` parameter and rethrows it, because a
+ * failed bind arrives *there* rather than anywhere else. Express registers
+ * whatever callback `listen` is given as a one-shot `error` listener on the
+ * underlying `http.Server` as well as its `listening` callback, so an
+ * `EADDRINUSE` is handed to this function and consumed by it — a callback that
+ * ignored its argument would print a URL nothing is listening on and exit 0.
+ * Rethrowing turns the bind failure back into an uncaught exception: Node
+ * prints the whole error, naming the port, and the process exits non-zero. That
+ * is the loud startup failure whose documented remedy is the `PORT` override
+ * described in README.md, and it is why no separate `error` listener is
+ * attached and no `try`/`catch` wraps the call — the hook Express already wires
+ * up is the one to use.
  *
  * @type {import('node:http').Server}
  */
-export const server = createApp().listen(port, () => {
+export const server = createApp().listen(port, (error) => {
+  if (error) {
+    // The bind failed, so there is nothing to advertise. Rethrowing here is the
+    // propagation mechanism — Node reports the uncaught exception and exits
+    // non-zero — and it has to happen before the log line below, which would
+    // otherwise claim a listener that does not exist.
+    throw error;
+  }
+
   // Logged from inside the callback, so the line appears only once the port is
   // actually bound and the URL it advertises is genuinely reachable. The path
   // comes from the imported constant rather than a second copy of the literal,

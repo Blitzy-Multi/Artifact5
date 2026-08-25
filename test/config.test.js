@@ -19,7 +19,10 @@
  *
  * Every test passes its own environment object to `loadConfig`. None of them
  * reads, writes or restores `process.env`, so the suite behaves identically on
- * a laptop that happens to export `PORT` and on one that does not.
+ * a laptop that happens to export `PORT` and on one that does not. Each test
+ * also keeps a copy of that object and compares it afterwards, because reading
+ * configuration is meant to be a pure function of its input: the value goes in
+ * and a fresh `{ port }` comes out, with nothing written back.
  */
 
 import test from 'node:test';
@@ -32,17 +35,42 @@ test('defaults to port 3000 when PORT is not set', () => {
   // no argument at all would read whatever the surrounding shell exports and
   // make this test pass or fail depending on the machine. Handing it an empty
   // object is what makes "PORT is not set" mean exactly that, everywhere.
-  assert.deepEqual(loadConfig({}), { port: 3000 });
+  //
+  // The environment object is kept in a variable and copied *before* the call,
+  // and the whole result is kept rather than destructured, because there are
+  // two contracts to check here and neither is visible from a lone `port`
+  // value: the result is exactly `{ port }`, and the call leaves the object it
+  // was handed alone.
+  const env = {};
+  const before = { ...env };
+  const result = loadConfig(env);
 
-  // Asserting the whole object above — rather than just its `port` property —
-  // also pins the documented shape: one property and no others. A stray extra
-  // field would fail here.
+  // Asserting the whole result — rather than just its `port` property — pins
+  // the documented shape: one property and no others, so a stray extra field
+  // fails here. Under `node:assert/strict` the comparison is type-exact as
+  // well, which is why the string `'3000'` could never pass for the number.
+  assert.deepEqual(
+    result,
+    { port: 3000 },
+    'an unset PORT should yield exactly { port: 3000 }',
+  );
+
+  // Configuration is a pure function of its input, so the object handed in has
+  // to come back with nothing added, changed or removed. An implementation
+  // that wrote the resolved port back into the caller's environment bag would
+  // satisfy every assertion about the return value and still be wrong.
+  assert.deepEqual(
+    env,
+    before,
+    'an unset PORT should leave the environment object untouched',
+  );
 
   // The default has to be a Number, not the string `'3000'`. An implementation
   // that simply handed back `env.PORT ?? 3000` would return a string for any
   // override, and the HTTP layer would accept that string without complaint —
-  // so this is the cheap assertion that catches an expensive surprise.
-  assert.equal(typeof loadConfig({}).port, 'number');
+  // so the numeric type is also stated outright, in the one assertion whose
+  // failure message says "number" in as many words.
+  assert.equal(typeof result.port, 'number');
 });
 
 test('honours a whole-integer PORT within 1-65535', () => {
@@ -59,17 +87,27 @@ test('honours a whole-integer PORT within 1-65535', () => {
   ];
 
   for (const [input, expected] of acceptedValues) {
-    const { port } = loadConfig({ PORT: input });
+    const env = { PORT: input };
+    const before = { ...env };
+    const result = loadConfig(env);
 
-    assert.equal(
-      port,
-      expected,
-      `PORT=${JSON.stringify(input)} should yield ${expected}`,
+    // Comparing the whole result covers three things in one assertion: the
+    // value, the Number type — `node:assert/strict` compares types, so the
+    // string `'5555'` cannot pass for `5555` and no separate `typeof` check is
+    // needed here — and the shape, so an extra property added on the accepted
+    // branch alone fails instead of slipping past a check that only read
+    // `port`.
+    assert.deepEqual(
+      result,
+      { port: expected },
+      `PORT=${JSON.stringify(input)} should yield exactly { port: ${expected} }`,
     );
-    assert.equal(
-      typeof port,
-      'number',
-      `PORT=${JSON.stringify(input)} should yield a Number, not a string`,
+    // And the value is read out of the environment, never written back into
+    // it: the accepted branch must leave the caller's object exactly as it was.
+    assert.deepEqual(
+      env,
+      before,
+      `PORT=${JSON.stringify(input)} should leave the environment object untouched`,
     );
   }
 });
@@ -98,12 +136,71 @@ test('falls back to port 3000 for a malformed PORT value', () => {
   ];
 
   for (const value of malformedValues) {
-    const { port } = loadConfig({ PORT: value });
+    const env = { PORT: value };
+    const before = { ...env };
+    const result = loadConfig(env);
 
-    assert.equal(
-      port,
-      3000,
-      `PORT=${JSON.stringify(value)} should fall back to 3000, not ${port}`,
+    // The fallback branch owes the caller the same result shape as the happy
+    // path: exactly `{ port: 3000 }` as a Number, which strict deep equality
+    // checks in one go — value, type and the absence of any extra property
+    // such as a "this value was rejected" flag.
+    assert.deepEqual(
+      result,
+      { port: 3000 },
+      `PORT=${JSON.stringify(value)} should fall back to exactly { port: 3000 }, not ${JSON.stringify(result)}`,
+    );
+    // Rejecting a value is not a licence to correct it in place: the malformed
+    // entry stays in the caller's object, unchanged and undeleted.
+    assert.deepEqual(
+      env,
+      before,
+      `PORT=${JSON.stringify(value)} should leave the environment object untouched`,
+    );
+  }
+
+  // The cases above are the ones an operator can actually type, because a real
+  // `process.env` value is always a string. These next ones can only arrive
+  // through the parameter: `loadConfig` takes its environment as an argument,
+  // so the exported contract has to hold for whatever a caller injects — and
+  // the grammar is a *string* grammar. Coercing instead of rejecting would let
+  // numeric `8080`, `8080n`, `[8080]` and any digit-stringifying object count
+  // as valid, and it would make `Object.create(null)` raise
+  // `TypeError: Cannot convert object to primitive value` instead of falling
+  // back — throwing is the one thing this module promises never to do.
+  //
+  // Each case is a [label, value] pair, and the message is built from the label
+  // alone, because the values themselves resist printing: `JSON.stringify` on a
+  // BigInt throws, and interpolating a symbol into a template literal throws
+  // too — so the loop above cannot simply be extended with these.
+  const nonStringValues = [
+    ['the number 8080', 8080],
+    ['the BigInt 8080n', 8080n],
+    ['the array [8080]', [8080]],
+    ['a boxed new Number(8080)', new Number(8080)],
+    ['an object whose toString returns "8080"', { toString: () => '8080' }],
+    ['the boolean true', true],
+    ['a null-prototype object', Object.create(null)],
+    ['a symbol', Symbol('8080')],
+  ];
+
+  for (const [label, value] of nonStringValues) {
+    const env = { PORT: value };
+    const before = { ...env };
+    const result = loadConfig(env);
+
+    // The same two contracts the string cases above check, for the same
+    // reasons: the result is exactly `{ port: 3000 }` with no rejection flag
+    // bolted on, and the injected object comes back untouched. Both messages
+    // name the case by its label, because these values cannot be interpolated.
+    assert.deepEqual(
+      result,
+      { port: 3000 },
+      `PORT set to ${label} should fall back to exactly { port: 3000 }`,
+    );
+    assert.deepEqual(
+      env,
+      before,
+      `PORT set to ${label} should leave the environment object untouched`,
     );
   }
 });

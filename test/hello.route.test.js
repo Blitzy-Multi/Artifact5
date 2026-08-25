@@ -54,9 +54,12 @@ import request from 'supertest';
 import { createApp } from '../src/app.js';
 
 test('GET /hello returns 200 with the plain-text body "Hello world"', async () => {
-  // Each test builds its own app. `createApp()` caches nothing at module
-  // scope, so these instances share no routing table and no settings, and no
-  // test can be disturbed by another one.
+  // Each test builds its own app: a fresh Express application with its own
+  // settings and its own top-level stack. The router inside it is shared —
+  // `helloRouter` is created once at module scope and every app mounts that
+  // same object — but its single route is fixed at import time and nothing
+  // reconfigures it while the suite runs, so there is no state for one test to
+  // leave behind for another.
   const app = createApp();
 
   // A fresh, unconditional request: no `If-None-Match` and no other
@@ -157,8 +160,9 @@ test('only the exact path /hello matches', async () => {
 test('the write verbs are not registered on /hello', async () => {
   const app = createApp();
 
-  // GET is the only verb this project registers, so everything else falls
-  // through to Express's default final handler, which answers 404.
+  // GET is the only verb this project registers, so each of the four write
+  // verbs below falls through to Express's default final handler, which
+  // answers 404.
   //
   // 404, not 405. Answering "method not allowed" instead looks like an
   // improvement and is the regression this test exists to prevent: it would
