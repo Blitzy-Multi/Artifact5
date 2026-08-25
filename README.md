@@ -30,6 +30,28 @@ field. npm normally warns rather than enforcing that range, so verify that `node
 directly, so from the project root run `nvm install` (nvm) or `fnm use --install-if-missing` (fnm) to
 install and activate it; if it is already installed, `nvm use` or `fnm use` is sufficient.
 
+**A note on npm's own dependencies.** The npm that arrives with Node `24.19.0` is npm `11.17.0`, and
+npm carries bundled copies of several packages that currently have published denial-of-service
+advisories. `brace-expansion` 5.0.6 has three HIGH ones, reached through the
+`glob` → `minimatch` → `brace-expansion` chain npm uses for pattern matching
+([GHSA-3jxr-9vmj-r5cp](https://github.com/advisories/GHSA-3jxr-9vmj-r5cp),
+[GHSA-mh99-v99m-4gvg](https://github.com/advisories/GHSA-mh99-v99m-4gvg),
+[GHSA-rgw5-rvv9-x895](https://github.com/advisories/GHSA-rgw5-rvv9-x895)). `tar` 7.5.16 has five of
+its own, in the archive parser that `npm ci` and `npm install` use to unpack the package tarballs
+they download; one of those five is CRITICAL
+([GHSA-23hp-3jrh-7fpw](https://github.com/advisories/GHSA-23hp-3jrh-7fpw)). `ip-address` 10.2.0 and
+`undici` 6.26.0 are affected too; npm reaches those through its SOCKS proxy support and its
+native-addon build tool.
+
+All of them belong to the npm command-line tool rather than to this service: the running server
+never loads that code, and none of those packages appears in this project's own dependency tree.
+`npm audit` comes back with `found 0 vulnerabilities` here because it audits this project's
+dependencies, not npm's own bundled copies. Nothing declared in a project can replace a copy that
+npm bundles inside itself, and no released npm — the newest included — yet bundles fixed versions of
+all four, so the pin in [`.nvmrc`](.nvmrc) stays as it is. Reaching any of them takes hostile input
+handed to npm, so install only from package sources you trust, let `npm ci` hold you to the
+committed lockfile, and run `npm` commands only against projects you trust.
+
 ## 1. Install
 
 ```bash

@@ -1,5 +1,3 @@
-// The single endpoint of this tutorial project: GET /hello responds with the plain-text body
-// "Hello world". HELLO_PATH is exported so src/server.js can compose the startup URL from it.
 import { Router } from 'express';
 
 export const HELLO_PATH = '/hello';
