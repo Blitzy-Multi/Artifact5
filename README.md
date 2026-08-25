@@ -231,8 +231,9 @@ relying on it. `brace-expansion` 5.0.6 has three HIGH ones, reached through the
 its own, in the archive parser that `npm ci` and `npm install` use to unpack the package tarballs
 they download; one of those five is CRITICAL
 ([GHSA-23hp-3jrh-7fpw](https://github.com/advisories/GHSA-23hp-3jrh-7fpw)). `ip-address` 10.2.0 and
-`undici` 6.26.0 are affected too; npm reaches those through its SOCKS proxy support and its
-native-addon build tool.
+`undici` 6.26.0 are affected too — three advisories and seven respectively, one HIGH apiece and the
+rest moderate or low; npm reaches those through its SOCKS proxy support and its native-addon build
+tool.
 
 All of them belong to the npm command-line tool rather than to this service: the running server
 never loads that code, and none of those packages appears in this project's own dependency tree.
