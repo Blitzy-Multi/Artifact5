@@ -18,6 +18,10 @@ export function createApp() {
   // Mounted without a path prefix on purpose: helloRouter registers its handler
   // at the full public path '/hello', so any prefix here would move the
   // endpoint - mounting at '/hello' would serve '/hello/hello'.
+  //
+  // helloRouter is module-scoped, so every createApp() call mounts that one
+  // shared Router. Safe: app.use wraps it in a Layer on this app's own stack
+  // rather than mutating it - mountpath/'mount' apply to sub-apps, not Routers.
   app.use(helloRouter);
 
   return app;

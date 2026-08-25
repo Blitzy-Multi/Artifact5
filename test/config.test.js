@@ -56,7 +56,10 @@ test('honours a whole-integer PORT within 1-65535', () => {
 });
 
 test('falls back to port 3000 for a malformed PORT value', () => {
-  // These strings exercise forms parseInt would partially accept; the grammar requires a full decimal match.
+  // The anchored /^[0-9]+$/ grammar rejects what parseInt would partially accept
+  // (trailing garbage, fraction, exponent, sign) plus the empty and blank values
+  // (it needs a digit after trimming). '0' and '65536' pass that grammar and are
+  // rejected only by the inclusive 1-65535 range check - a separate, needed guard.
   const malformedValues = [
     '8080abc',
     '3.5',
