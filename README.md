@@ -221,19 +221,22 @@ typically — gets a `304` with no body, which is correct HTTP rather than a fai
 ## Appendix: npm's own bundled dependencies
 
 The npm that arrives with Node `24.19.0` is npm `11.17.0`, and npm carries bundled copies of several
-packages that currently have published denial-of-service advisories. Everything below is a snapshot
-verified on 2026-08-25; advisories against a frozen version only accumulate, so re-check it before
-relying on it. `brace-expansion` 5.0.6 has three HIGH ones, reached through the
+packages that currently have published security advisories. Everything below is a snapshot verified
+on 2026-08-25; advisories against a frozen version only accumulate, so re-check it before relying on
+it. `brace-expansion` 5.0.6 has three HIGH ones, all denial of service, reached through the
 `glob` → `minimatch` → `brace-expansion` chain npm uses for pattern matching
 ([GHSA-3jxr-9vmj-r5cp](https://github.com/advisories/GHSA-3jxr-9vmj-r5cp),
 [GHSA-mh99-v99m-4gvg](https://github.com/advisories/GHSA-mh99-v99m-4gvg),
 [GHSA-rgw5-rvv9-x895](https://github.com/advisories/GHSA-rgw5-rvv9-x895)). `tar` 7.5.16 has five of
-its own, in the archive parser that `npm ci` and `npm install` use to unpack the package tarballs
-they download; one of those five is CRITICAL
+its own, denial of service too, in the archive parser that `npm ci` and `npm install` use to unpack
+the package tarballs they download; one of those five is CRITICAL
 ([GHSA-23hp-3jrh-7fpw](https://github.com/advisories/GHSA-23hp-3jrh-7fpw)). `ip-address` 10.2.0 and
 `undici` 6.26.0 are affected too — three advisories and seven respectively, one HIGH apiece and the
 rest moderate or low; npm reaches those through its SOCKS proxy support and its native-addon build
-tool.
+tool. Their advisories are a different class: none of `ip-address`'s three is a denial of service —
+all three are SSRF and trust-boundary bypasses from addresses it misclassifies — and six of
+`undici`'s seven are injection, cookie-handling, response-desynchronization and
+response-queue-poisoning defects, with the seventh a WebSocket denial of service.
 
 All of them belong to the npm command-line tool rather than to this service: the running server
 never loads that code, and none of those packages appears in this project's own dependency tree.
