@@ -31,8 +31,10 @@ function reportStartupFailure(error) {
 
   // A failed bind leaves no listening handle, and Node unrefs signal handles, so
   // nothing holds the event loop open: the process ends with this status once
-  // stderr has flushed. process.exit() is avoided deliberately - it can truncate
-  // a pending pipe write and lose the message above.
+  // stderr has flushed. Setting exitCode is what allows that flush, because
+  // process.exit() can truncate the pending write and lose the message above.
+  // The shutdown path below writes nothing of its own and so exits outright -
+  // the one rule both follow is to exit only once nothing is left to write.
   process.exitCode = 1;
 }
 
@@ -50,7 +52,6 @@ export const server = createApp().listen(port, (error) => {
     return;
   }
 
-  // Log only after the listening callback confirms the bind.
   console.log(`Hello service listening on http://localhost:${port}${HELLO_PATH}`);
 });
 
@@ -58,7 +59,9 @@ const SHUTDOWN_SIGNALS = ['SIGINT', 'SIGTERM'];
 
 for (const signal of SHUTDOWN_SIGNALS) {
   process.on(signal, () => {
-    // Exit only after server.close finishes so new connections stop and active requests can drain.
+    // Exiting outright is safe here because this path writes nothing of its
+    // own, so no message can be cut short, and it happens from the close
+    // callback so new connections stop and active requests drain first.
     server.close(() => process.exit(0));
   });
 }

@@ -33,9 +33,9 @@ field. npm normally warns rather than enforcing that range, so verify that `node
 version it contains as an argument instead — `nvm install <version>` then `nvm use <version>`; `fnm`
 reads the file on every platform.
 
-**A note on npm itself.** The npm bundled with Node carries published advisories of its own, none of
-which the running service ever loads; the appendix at the end of this document records them and what
-they mean for you.
+**A note on npm itself.** npm ships with Node and is audited separately from this project's
+dependencies; the appendix at the end of this document explains what `npm audit` here does and does
+not cover.
 
 ## 1. Install
 
@@ -98,9 +98,10 @@ too, ask `curl` for them with `curl -i http://localhost:3000/hello`: the respons
 **Terminal 1 — stop the service:**
 
 Press **Ctrl-C**. The service closes its listener and exits cleanly, which frees the port for the
-next run. Node closes idle keep-alive connections as part of that, so a browser tab that already has
-its response does not hold the shutdown open; the process waits only on a connection whose request is
-still unfinished.
+next run. Connections that are already idle — a browser tab holding a response it has finished
+receiving, for instance — are closed as part of that, so they do not hold the shutdown open. A
+request still in flight is allowed to finish first, so the exit can lag by a few seconds while that
+last connection winds down.
 
 ## 3. Run the tests
 
@@ -220,31 +221,14 @@ typically — gets a `304` with no body, which is correct HTTP rather than a fai
 
 ## Appendix: npm's own bundled dependencies
 
-The npm that arrives with Node `24.19.0` is npm `11.17.0`, and npm carries bundled copies of several
-packages that currently have published security advisories. Everything below is a snapshot verified
-on 2026-08-25; advisories against a frozen version only accumulate, so re-check it before relying on
-it. `brace-expansion` 5.0.6 has three HIGH ones, all denial of service, reached through the
-`glob` → `minimatch` → `brace-expansion` chain npm uses for pattern matching
-([GHSA-3jxr-9vmj-r5cp](https://github.com/advisories/GHSA-3jxr-9vmj-r5cp),
-[GHSA-mh99-v99m-4gvg](https://github.com/advisories/GHSA-mh99-v99m-4gvg),
-[GHSA-rgw5-rvv9-x895](https://github.com/advisories/GHSA-rgw5-rvv9-x895)). `tar` 7.5.16 has five of
-its own, denial of service too, in the archive parser that `npm ci` and `npm install` use to unpack
-the package tarballs they download; one of those five is CRITICAL
-([GHSA-23hp-3jrh-7fpw](https://github.com/advisories/GHSA-23hp-3jrh-7fpw)). `ip-address` 10.2.0 and
-`undici` 6.26.0 are affected too — three advisories and seven respectively, one HIGH apiece and the
-rest moderate or low; npm reaches those through its SOCKS proxy support and its native-addon build
-tool. Their advisories are a different class: none of `ip-address`'s three is a denial of service —
-all three are SSRF and trust-boundary bypasses from addresses it misclassifies — and six of
-`undici`'s seven are injection, cookie-handling, response-desynchronization and
-response-queue-poisoning defects, with the seventh a WebSocket denial of service.
+`npm audit` reports `found 0 vulnerabilities` for this project. What it audits is the dependency
+tree declared here — the one `npm ci` installs from `package-lock.json` — and not the packages that
+npm bundles inside itself for its own use, which are a separate tree it carries internally.
 
-All of them belong to the npm command-line tool rather than to this service: the running server
-never loads that code, and none of those packages appears in this project's own dependency tree.
-`npm audit` comes back with `found 0 vulnerabilities` here because it audits this project's
-dependencies, not npm's own bundled copies. Nothing declared in a project can replace a copy that
-npm bundles inside itself, and no released npm — the newest included — yet bundles fixed versions of
-all four; a newer npm does replace some of those bundled copies with fixed ones, so moving to one
-reduces the exposure without eliminating it, and the pin in [`.nvmrc`](.nvmrc) stays as it is.
-Reaching any of them takes hostile input handed to npm, so install only from package sources you
-trust, let `npm ci` hold you to the committed lockfile, and run `npm` commands only against projects
-you trust.
+That distinction is worth knowing if you ever read an advisory against one of those bundled
+packages. They belong to the npm command-line tool rather than to this project: the running service
+loads only what this project declares, and a copy npm carries internally cannot be replaced by
+anything a project declares — it moves only when npm itself does. npm arrives with Node, so the
+version in play is the one [`.nvmrc`](.nvmrc) pins, with the supported line in
+[`package.json`](package.json). Either way the hygiene is the same: install only from package
+sources you trust, and let `npm ci` hold you to the committed lockfile.

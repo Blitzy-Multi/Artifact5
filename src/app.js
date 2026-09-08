@@ -19,9 +19,10 @@ export function createApp() {
   // at the full public path '/hello', so any prefix here would move the
   // endpoint - mounting at '/hello' would serve '/hello/hello'.
   //
-  // helloRouter is module-scoped, so every createApp() call mounts that one
-  // shared Router. Safe: app.use wraps it in a Layer on this app's own stack
-  // rather than mutating it - mountpath/'mount' apply to sub-apps, not Routers.
+  // helloRouter is module-scoped, so every createApp() call mounts that same
+  // Router. That is safe because mounting records the router on this app's own
+  // stack instead of changing the router, which is what lets each test build
+  // its own app.
   app.use(helloRouter);
 
   return app;

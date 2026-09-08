@@ -3,11 +3,35 @@ import assert from 'node:assert/strict';
 
 import { loadConfig } from '../src/config.js';
 
-test('defaults to port 3000 when PORT is not set', () => {
-  // Pass an empty object so the test does not depend on the caller's process.env.
-  const env = {};
+/**
+ * Call `loadConfig` with `env`, assert the call left `env` untouched, and return
+ * the configuration it produced.
+ *
+ * `loadConfig` is specified as a pure function of its argument, so every case in
+ * this file owes that check as well as a check of the port it returns. Holding
+ * the snapshot-and-compare in one place states the rule once and leaves each
+ * case to the value it is actually about.
+ *
+ * @param {Record<string, unknown>} env Environment-like object to read from.
+ * @param {string} subject How this case names itself in a failure message.
+ * @returns {{ port: number }} The configuration `loadConfig` returned.
+ */
+function loadConfigWithoutMutating(env, subject) {
   const before = { ...env };
   const result = loadConfig(env);
+
+  assert.deepEqual(
+    env,
+    before,
+    `${subject} should leave the environment object untouched`,
+  );
+
+  return result;
+}
+
+test('defaults to port 3000 when PORT is not set', () => {
+  // Pass an empty object so the test does not depend on the caller's process.env.
+  const result = loadConfigWithoutMutating({}, 'an unset PORT');
 
   assert.deepEqual(
     result,
@@ -15,13 +39,11 @@ test('defaults to port 3000 when PORT is not set', () => {
     'an unset PORT should yield exactly { port: 3000 }',
   );
 
-  assert.deepEqual(
-    env,
-    before,
-    'an unset PORT should leave the environment object untouched',
+  assert.equal(
+    typeof result.port,
+    'number',
+    'the port should be reported as a number',
   );
-
-  assert.equal(typeof result.port, 'number');
 });
 
 test('honours a whole-integer PORT within 1-65535', () => {
@@ -38,24 +60,18 @@ test('honours a whole-integer PORT within 1-65535', () => {
   ];
 
   for (const [input, expected] of acceptedValues) {
-    const env = { PORT: input };
-    const before = { ...env };
-    const result = loadConfig(env);
+    const subject = `PORT=${JSON.stringify(input)}`;
+    const result = loadConfigWithoutMutating({ PORT: input }, subject);
 
     assert.deepEqual(
       result,
       { port: expected },
-      `PORT=${JSON.stringify(input)} should yield exactly { port: ${expected} }`,
-    );
-    assert.deepEqual(
-      env,
-      before,
-      `PORT=${JSON.stringify(input)} should leave the environment object untouched`,
+      `${subject} should yield exactly { port: ${expected} }`,
     );
   }
 });
 
-test('falls back to port 3000 for a malformed PORT value', () => {
+test('falls back to port 3000 for a malformed or non-string PORT value', () => {
   // The anchored /^[0-9]+$/ grammar rejects what parseInt would partially accept
   // (trailing garbage, fraction, exponent, sign) plus the empty and blank values
   // (it needs a digit after trimming). '0' and '65536' pass that grammar and are
@@ -73,23 +89,23 @@ test('falls back to port 3000 for a malformed PORT value', () => {
   ];
 
   for (const value of malformedValues) {
-    const env = { PORT: value };
-    const before = { ...env };
-    const result = loadConfig(env);
+    const subject = `PORT=${JSON.stringify(value)}`;
+    const result = loadConfigWithoutMutating({ PORT: value }, subject);
 
     assert.deepEqual(
       result,
       { port: 3000 },
-      `PORT=${JSON.stringify(value)} should fall back to exactly { port: 3000 }, not ${JSON.stringify(result)}`,
-    );
-    assert.deepEqual(
-      env,
-      before,
-      `PORT=${JSON.stringify(value)} should leave the environment object untouched`,
+      `${subject} should fall back to exactly { port: 3000 }, ` +
+        `not ${JSON.stringify(result)}`,
     );
   }
 
-  // Keep injected non-string cases separate; labels avoid JSON.stringify(BigInt) and template interpolation of Symbol, both of which throw.
+  // The rest of this test covers the same fallback for values a real
+  // process.env could never hold, because loadConfig rejects a non-string
+  // outright instead of coercing it: no coercion path may widen the grammar
+  // above. Each case is kept in its own list and carries a written label,
+  // because JSON.stringify throws on a BigInt and interpolating a Symbol into a
+  // template string throws too.
   const nonStringValues = [
     ['the number 8080', 8080],
     ['the BigInt 8080n', 8080n],
@@ -102,19 +118,13 @@ test('falls back to port 3000 for a malformed PORT value', () => {
   ];
 
   for (const [label, value] of nonStringValues) {
-    const env = { PORT: value };
-    const before = { ...env };
-    const result = loadConfig(env);
+    const subject = `PORT set to ${label}`;
+    const result = loadConfigWithoutMutating({ PORT: value }, subject);
 
     assert.deepEqual(
       result,
       { port: 3000 },
-      `PORT set to ${label} should fall back to exactly { port: 3000 }`,
-    );
-    assert.deepEqual(
-      env,
-      before,
-      `PORT set to ${label} should leave the environment object untouched`,
+      `${subject} should fall back to exactly { port: 3000 }`,
     );
   }
 });

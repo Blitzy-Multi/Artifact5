@@ -46,6 +46,11 @@ test('GET /hello returns 200 with the plain-text body "Hello world"', async () =
   );
 
   // Pin the project decision to disable Express's default X-Powered-By header.
+  // Two assertions, and they are not the same claim: the first reads the value a
+  // caller would see, while the second requires the key itself to be missing
+  // from the parsed header set. Absence is the stronger statement — a key
+  // present but set to undefined would satisfy the value check — so both stay,
+  // and a failure then says which of the two broke.
   assert.equal(
     response.headers['x-powered-by'],
     undefined,
@@ -65,8 +70,9 @@ test('GET /hello returns 200 with the plain-text body "Hello world"', async () =
 test('only the exact path /hello matches', async () => {
   const app = createApp();
 
-  // These literals cover the case variants and the trailing slash
-  // independently of the route module. Both exactness options live on the
+  // These literals cover the three case variants, the trailing slash, a longer
+  // path sharing the same prefix and the root — all written out here rather
+  // than derived from the route module. Both exactness options live on the
   // `Router` constructor, because the app-level `case sensitive routing` and
   // `strict routing` settings do not reach a Router mounted with `use()`.
   const nonMatchingPaths = ['/Hello', '/HELLO', '/hEllO', '/hello/', '/hello2', '/'];
@@ -89,8 +95,13 @@ test('the write verbs are not registered on /hello', async () => {
   const app = createApp();
 
   // No handler is registered for these verbs, so Express's default final
-  // handler answers 404 rather than 405. Supertest names its request methods
-  // in lowercase, which is why the agent is indexed.
+  // handler answers 404 rather than 405.
+  //
+  // The names are lowercase because that is how Supertest exposes each HTTP
+  // verb: `request(app)` returns an object carrying one lowercase method per
+  // verb — `.post()`, `.put()` and so on. Writing `request(app).post(...)`
+  // would fix the verb in the code, so the loop reaches the method matching the
+  // current list entry by indexing that object instead: `request(app)[verb]`.
   const unregisteredVerbs = ['post', 'put', 'delete', 'patch'];
 
   for (const verb of unregisteredVerbs) {
