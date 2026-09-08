@@ -228,7 +228,7 @@ npm bundles inside itself for its own use, which are a separate tree it carries 
 That distinction is worth knowing if you ever read an advisory against one of those bundled
 packages. They belong to the npm command-line tool rather than to this project: the running service
 loads only what this project declares, and a copy npm carries internally cannot be replaced by
-anything a project declares — it moves only when npm itself does. npm arrives with Node, so the
-version in play is the one [`.nvmrc`](.nvmrc) pins, with the supported line in
-[`package.json`](package.json). Either way the hygiene is the same: install only from package
-sources you trust, and let `npm ci` hold you to the committed lockfile.
+anything a project declares — it moves only when npm itself does. npm arrives with Node, so the npm
+you get is the one bundled with the Node version [`.nvmrc`](.nvmrc) pins, and the supported Node
+line is declared in [`package.json`](package.json). Either way the hygiene is the same: install
+only from package sources you trust, and let `npm ci` hold you to the committed lockfile.
