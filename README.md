@@ -100,8 +100,8 @@ too, ask `curl` for them with `curl -i http://localhost:3000/hello`: the respons
 Press **Ctrl-C**. The service closes its listener and exits cleanly, which frees the port for the
 next run. Connections that are already idle — a browser tab holding a response it has finished
 receiving, for instance — are closed as part of that, so they do not hold the shutdown open. A
-request still in flight is allowed to finish first, so the exit can lag by a few seconds while that
-last connection winds down.
+request still in flight is allowed to finish before the close callback runs, so the exit may be
+delayed until that request and its response complete; no separate shutdown deadline is configured.
 
 ## 3. Run the tests
 

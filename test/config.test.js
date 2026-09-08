@@ -103,7 +103,7 @@ test('falls back to port 3000 for a malformed or non-string PORT value', () => {
   // The rest of this test covers the same fallback for values a real
   // process.env could never hold, because loadConfig rejects a non-string
   // outright instead of coercing it: no coercion path may widen the grammar
-  // above. Each case is kept in its own list and carries a written label,
+  // above. These cases are kept in a separate list and carry written labels,
   // because JSON.stringify throws on a BigInt and interpolating a Symbol into a
   // template string throws too.
   const nonStringValues = [

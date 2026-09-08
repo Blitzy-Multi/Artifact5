@@ -33,8 +33,8 @@ function reportStartupFailure(error) {
   // nothing holds the event loop open: the process ends with this status once
   // stderr has flushed. Setting exitCode is what allows that flush, because
   // process.exit() can truncate the pending write and lose the message above.
-  // The shutdown path below writes nothing of its own and so exits outright -
-  // the one rule both follow is to exit only once nothing is left to write.
+  // The signal path below writes no shutdown message of its own, and exits 0
+  // from server.close()'s callback rather than by setting exitCode.
   process.exitCode = 1;
 }
 
@@ -59,9 +59,11 @@ const SHUTDOWN_SIGNALS = ['SIGINT', 'SIGTERM'];
 
 for (const signal of SHUTDOWN_SIGNALS) {
   process.on(signal, () => {
-    // Exiting outright is safe here because this path writes nothing of its
-    // own, so no message can be cut short, and it happens from the close
-    // callback so new connections stop and active requests drain first.
+    // Exit from the close callback, so the listener stops accepting connections
+    // and in-flight requests finish first. That is the whole of what close()
+    // establishes - it says nothing about writes pending elsewhere in the
+    // process, which process.exit() can still cut short - which is why this
+    // handler deliberately prints no shutdown message of its own.
     server.close(() => process.exit(0));
   });
 }
